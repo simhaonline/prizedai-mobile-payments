@@ -169,7 +169,7 @@ $this->form_fields = array(
 'title'       => 'Description',
 'type'        => 'textarea',
 'description' => 'This controls the description which the user sees during checkout.',
-'default'     => 'Pay with your credit card via our super-cool payment gateway.',
+'default'     => '1. Enter the Mpesa phone number in the box below 2.  Click on the place order button 3.  Enter the mpesa pin on your phone 4. Click on complete.',
 ),
 );
 }
@@ -288,6 +288,7 @@ exit();
 function prizedai_mpesa_request_payment(){
      $data = array();
 		 $total = ceil(WC()->cart->total);
+     //$total = 1;
      $option = get_option( 'prizedai_mobile_payments_mpesa' );
      $phone = prizedai_clean_phone_number($_POST['mpesaPhoneNumber']);
      $consumer_key = isset($option['consumer_key']) ? $option['consumer_key'] : NULL;
@@ -357,9 +358,6 @@ function prizedai_mpesa_request_payment(){
 		$domainName = $_SERVER['HTTP_HOST'].'/';
 
 		$callback_url =  $protocol.$domainName;
-
-    $callback_url = 'https://biznesskit.com/';//delete
-
 
 
 		//Generate the password//
@@ -500,20 +498,28 @@ function prizedai_confirm_payment_status()
 
 function prizedai_mpesa_callback()
 {
-  if( !isset($_POST["Body"]) )
-    exit();
-  $body = $_POST["Body"];
-  $callback = $body["stkCallback"];
+  $postData = file_get_contents('php://input');
+  $encapsulate = '{"callback_results":[' . $postData . ']}';
+  $json_data = json_decode($encapsulate, true);
+  $key = 0;
 
+  $merchant_id = $json_data["callback_results"][$key]["Body"]["stkCallback"]["MerchantRequestID"];
 
-  if( !isset($callback["ResultCode"]) )
+//  $checkout_id = $json_data["callback_results"][$key]["Body"]["stkCallback"]["CheckoutRequestID"];
+
+  $rescode = $json_data["callback_results"][$key]["Body"]["stkCallback"]["ResultCode"];
+
+  //$resdesc = $json_data["callback_results"][$key]["Body"]["stkCallback"]["ResultDesc"];
+
+  if( !$merchant_id  )
     exit();
-  if( $callback["ResultCode"] != "0" )
+
+  if( $rescode != "0" )
     exit();
 
   global $wpdb;
   $name = $wpdb->prefix .'prizedai_mobile_payments';
-  $sql = 'UPDATE '.$name.' SET status = 1 WHERE  merchant_request_id = "'.$callback["MerchantRequestID"].'"';
+  $sql = 'UPDATE '.$name.' SET status = 1 WHERE  merchant_request_id = "'.$merchant_id.'"';
   echo $wpdb->query($sql);
 
   $option = get_option( 'prizedai_mobile_payments_sms' );
@@ -521,7 +527,7 @@ function prizedai_mpesa_callback()
   if( !isset($option['enabled']) )
     exit();
 
-  $sql2 = 'SELECT phone_number FROM '.$name.' WHERE merchant_request_id = "'.$callback["MerchantRequestID"].'"';
+  $sql2 = 'SELECT phone_number FROM '.$name.' WHERE merchant_request_id = "'.$merchant_id.'"';
 
   $recipient = $wpdb->get_var($sql2);
 
